@@ -1,0 +1,55 @@
+{
+  "single_batch": {
+    "scenario": "single-batch (1 request x 10,000 readings)",
+    "requests": 1,
+    "accepted": 10000,
+    "errors": 0,
+    "accept_latency_s": 0.0835,
+    "accept_throughput_per_s": 119790.8,
+    "drain_latency_s": 0.2368,
+    "total_latency_s": 0.3203,
+    "health_before": {
+      "status": "ok",
+      "accepted": 0,
+      "persisted": 0,
+      "alerts_created": 0,
+      "rejected_full": 0,
+      "queueDepth": 0
+    },
+    "health_after": {
+      "status": "ok",
+      "accepted": 10000,
+      "persisted": 10000,
+      "alerts_created": 0,
+      "rejected_full": 0,
+      "queueDepth": 0
+    }
+  },
+  "concurrent_fanout": {
+    "scenario": "concurrent-fanout (200 requests x 50 readings, fired together)",
+    "requests": 200,
+    "accepted": 10000,
+    "errors": 0,
+    "error_samples": [],
+    "accept_latency_s": 0.8328,
+    "accept_throughput_per_s": 12007.2,
+    "drain_latency_s": 0.0587,
+    "total_latency_s": 0.8915,
+    "health_before": {
+      "status": "ok",
+      "accepted": 10000,
+      "persisted": 10000,
+      "alerts_created": 0,
+      "rejected_full": 0,
+      "queueDepth": 0
+    },
+    "health_after": {
+      "status": "ok",
+      "accepted": 20000,
+      "persisted": 20000,
+      "alerts_created": 0,
+      "rejected_full": 0,
+      "queueDepth": 0
+    }
+  }
+}
