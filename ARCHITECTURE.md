@@ -105,13 +105,15 @@ average matched the pre-restart calculation exactly.
 
 A rule that's genuinely broken (sensor stuck above threshold) would
 otherwise fire on every single reading forever, flooding the alerts table
-and whoever's on the other end of it. `create_alert_if_not_cooling_down` in
-`app/store.py` enforces a cooldown window (`ALERT_COOLDOWN_SECONDS`) per
-(rule, sensor) pair — the first breach creates an alert, subsequent
+and whoever's on the other end of it. `RuleEngine.should_create_alert` in
+`app/rules_engine.py` enforces a cooldown window (`ALERT_COOLDOWN_SECONDS`) per
+(rule, sensor) pair, in memory (seeded from SQLite on startup), so the hot
+path does no per-reading queries — the first breach creates an alert, subsequent
 breaches within the cooldown are suppressed, and the cooldown resets once
 it elapses. Verified by sending a rule-breaking reading twice in quick
 succession and confirming only one alert exists, then waiting out the
-cooldown and confirming a third breach creates a new one.
+cooldown and confirming a third breach creates a new one. An acknowledged
+alert keeps suppressing new ones until it is resolved.
 
 ## Load test results
 

@@ -69,6 +69,7 @@ python simulator.py --sensors 20 --rate 5 --duration 60 --spike library-floor-2
 | `POST /rules` | Create an alert rule |
 | `GET /rules`, `GET /rules/{id}` | List / fetch rules |
 | `PUT /rules/{id}` | Edit a rule |
+| `DELETE /rules/{id}` | Delete a rule and drop its window state |
 | `POST /rules/{id}/enable`, `/disable` | Toggle a rule without deleting it |
 | `GET /alerts` | List alerts (filter by `status`, `sensorId`, `ruleId`) |
 | `POST /alerts/{id}/acknowledge`, `/resolve` | Alert lifecycle |

@@ -33,6 +33,7 @@ def _log_task_death(task: asyncio.Task) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _consumer_task
+    ingestion.accepting = True
     await init_db()
     await ingestion.load_rules_into_engine()
     await ingestion.rehydrate_windows()
@@ -41,7 +42,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    _consumer_task.cancel()
+    ingestion.accepting = False
+    _consumer_task.cancel()  # consumer drains the queue on cancel
     try:
         await _consumer_task
     except asyncio.CancelledError:

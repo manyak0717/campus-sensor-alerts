@@ -7,6 +7,8 @@ trade-off if this needed to scale to multiple processes.
 """
 from __future__ import annotations
 
+import asyncio
+
 import aiosqlite
 from datetime import datetime, timezone
 
@@ -22,6 +24,7 @@ CREATE TABLE IF NOT EXISTS readings (
 );
 CREATE INDEX IF NOT EXISTS idx_readings_sensor_type_ts
     ON readings (sensor_id, type, timestamp);
+CREATE INDEX IF NOT EXISTS idx_readings_ts ON readings (timestamp);
 
 CREATE TABLE IF NOT EXISTS rules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,13 +50,15 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at TEXT NOT NULL,
     acknowledged_at TEXT,
     resolved_at TEXT,
-    FOREIGN KEY (rule_id) REFERENCES rules(id)
+    FOREIGN KEY (rule_id) REFERENCES rules(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_rule_sensor_created
     ON alerts (rule_id, sensor_id, created_at);
 """
 
 _conn: aiosqlite.Connection | None = None
+# Serializes write transactions on the single shared connection.
+write_lock = asyncio.Lock()
 
 
 async def init_db() -> aiosqlite.Connection:
@@ -63,6 +68,8 @@ async def init_db() -> aiosqlite.Connection:
     # the background writer without blocking each other on file locks.
     await _conn.execute("PRAGMA journal_mode=WAL;")
     await _conn.execute("PRAGMA synchronous=NORMAL;")
+    await _conn.execute("PRAGMA foreign_keys=ON;")
+    await _conn.execute("PRAGMA busy_timeout=5000;")
     await _conn.executescript(SCHEMA)
     await _conn.commit()
     return _conn
@@ -79,10 +86,11 @@ def get_conn() -> aiosqlite.Connection:
 
 
 def iso(dt: datetime) -> str:
+    """Fixed-width UTC format so SQLite's string comparisons are chronological."""
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def parse_iso(s: str) -> datetime:
-    return datetime.fromisoformat(s)
+    return datetime.fromisoformat(s.replace("Z", "+00:00"))

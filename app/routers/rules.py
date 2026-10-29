@@ -1,5 +1,5 @@
-"""Organizer-facing rule management: create, edit, enable, disable."""
-from fastapi import APIRouter, HTTPException
+"""Organizer-facing rule management: create, edit, enable, disable, delete."""
+from fastapi import APIRouter, HTTPException, Response
 
 from app import ingestion, store
 from app.models import RuleCreate, RuleOut, RuleUpdate
@@ -29,6 +29,7 @@ async def create_rule(body: RuleCreate):
     rule_id = await store.insert_rule(row)
     rule = await store.get_rule(rule_id)
     ingestion.engine.load_rule(rule)
+    await ingestion.rehydrate_rule_windows(rule)
     return _out(rule)
 
 
@@ -51,29 +52,31 @@ async def edit_rule(rule_id: int, body: RuleUpdate):
     if not existing:
         raise HTTPException(404, "Rule not found")
 
+    provided = body.model_fields_set
     fields = {}
-    if body.name is not None:
+    if "name" in provided and body.name is not None:
         fields["name"] = body.name
-    if body.sensorId is not None:
-        fields["sensor_id"] = body.sensorId
-    if body.metric is not None:
+    if "sensorId" in provided:
+        fields["sensor_id"] = body.sensorId  # allows clearing back to None
+    if "metric" in provided and body.metric is not None:
         fields["metric"] = body.metric
-    if body.operator is not None:
+    if "operator" in provided and body.operator is not None:
         fields["operator"] = body.operator.value
-    if body.threshold is not None:
+    if "threshold" in provided and body.threshold is not None:
         fields["threshold"] = body.threshold
-    if body.windowSeconds is not None:
+    if "windowSeconds" in provided:
+        if existing["kind"] == "window" and body.windowSeconds is None:
+            raise HTTPException(422, "windowSeconds cannot be null for a window rule")
         fields["window_seconds"] = body.windowSeconds
-    if body.aggregation is not None:
-        fields["aggregation"] = body.aggregation.value
+    if "aggregation" in provided:
+        if existing["kind"] == "window" and body.aggregation is None:
+            raise HTTPException(422, "aggregation cannot be null for a window rule")
+        fields["aggregation"] = body.aggregation.value if body.aggregation else None
 
     rule = await store.update_rule(rule_id, fields)
-    # Window shape may have changed (windowSeconds/aggregation) — drop the
-    # cached in-memory windows for this rule so stale state can't linger.
-    # They are rebuilt lazily from new readings (no startup-style replay
-    # here; documented as a known simplification in ARCHITECTURE.md).
     ingestion.engine.load_rule(rule)
     ingestion.engine.reset_windows_for_rule(rule_id)
+    await ingestion.rehydrate_rule_windows(rule)
     return _out(rule)
 
 
@@ -83,6 +86,8 @@ async def enable_rule(rule_id: int):
     if not rule:
         raise HTTPException(404, "Rule not found")
     ingestion.engine.load_rule(rule)
+    ingestion.engine.reset_windows_for_rule(rule_id)
+    await ingestion.rehydrate_rule_windows(rule)
     return _out(rule)
 
 
@@ -92,4 +97,14 @@ async def disable_rule(rule_id: int):
     if not rule:
         raise HTTPException(404, "Rule not found")
     ingestion.engine.load_rule(rule)
+    ingestion.engine.reset_windows_for_rule(rule_id)
     return _out(rule)
+
+
+@router.delete("/{rule_id}", status_code=204)
+async def delete_rule(rule_id: int):
+    deleted = await store.delete_rule(rule_id)
+    if not deleted:
+        raise HTTPException(404, "Rule not found")
+    ingestion.engine.drop_rule(rule_id)
+    return Response(status_code=204)

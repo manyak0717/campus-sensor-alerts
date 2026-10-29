@@ -6,17 +6,19 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Literal, Optional
+from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
+
+from app.config import MAX_WINDOW_SECONDS
 
 
 # ---------------------------------------------------------------- readings
 
 class Reading(BaseModel):
-    sensorId: str
-    type: str  # e.g. "temperature", "air_quality", "occupancy"
-    value: float
+    sensorId: str = Field(min_length=1)
+    type: str = Field(min_length=1)  # e.g. "temperature", "air_quality", "occupancy"
+    value: float = Field(allow_inf_nan=False)
     timestamp: datetime
 
     @field_validator("timestamp")
@@ -26,7 +28,7 @@ class Reading(BaseModel):
         # simulator and the example reading in the brief ("...Z").
         if v.tzinfo is None:
             return v.replace(tzinfo=timezone.utc)
-        return v
+        return v.astimezone(timezone.utc)
 
 
 class ReadingBatch(BaseModel):
@@ -59,13 +61,13 @@ class Aggregation(str, Enum):
 
 
 class RuleCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1)
     sensorId: Optional[str] = None  # None = applies to all sensors of `metric`
-    metric: str                     # matches Reading.type, e.g. "temperature"
+    metric: str = Field(min_length=1, validation_alias=AliasChoices("metric", "sensorType"))  # matches Reading.type
     kind: RuleKind
     operator: Operator
-    threshold: float
-    windowSeconds: Optional[int] = None    # required if kind == window
+    threshold: float = Field(allow_inf_nan=False)
+    windowSeconds: Optional[int] = Field(default=None, gt=0, le=MAX_WINDOW_SECONDS)  # required if kind == window
     aggregation: Optional[Aggregation] = None  # required if kind == window
     enabled: bool = True
 
@@ -89,10 +91,10 @@ class RuleCreate(BaseModel):
 class RuleUpdate(BaseModel):
     name: Optional[str] = None
     sensorId: Optional[str] = None
-    metric: Optional[str] = None
+    metric: Optional[str] = Field(default=None, validation_alias=AliasChoices("metric", "sensorType"))
     operator: Optional[Operator] = None
-    threshold: Optional[float] = None
-    windowSeconds: Optional[int] = None
+    threshold: Optional[float] = Field(default=None, allow_inf_nan=False)
+    windowSeconds: Optional[int] = Field(default=None, gt=0, le=MAX_WINDOW_SECONDS)
     aggregation: Optional[Aggregation] = None
 
 

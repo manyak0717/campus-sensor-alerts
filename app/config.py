@@ -23,12 +23,17 @@ WRITE_FLUSH_INTERVAL_SECONDS = 0.5
 # process is killed. See ARCHITECTURE.md "backpressure" section.
 INGEST_QUEUE_MAXSIZE = 200_000
 
-# When we rehydrate rolling windows on startup, how far back to look. Must
-# be >= the largest window any rule uses, or a just-restarted process will
-# under-count a window rule until enough new readings arrive.
-MAX_WINDOW_SECONDS = 60 * 60  # 1 hour of lookback on startup
+# When we rehydrate rolling windows on startup (or rule creation/edit), how
+# far back to look. Also serves as the upper bound for rule windowSeconds.
+MAX_WINDOW_SECONDS = 60 * 60  # 1 hour; also the max allowed rule windowSeconds
+
+# How long raw readings are retained in SQLite before background pruning.
+READINGS_RETENTION_SECONDS = 24 * 60 * 60  # 24 hours
+PRUNE_INTERVAL_SECONDS = 300.0             # prune every 5 minutes
+
 
 # Minimum time between two alerts for the *same* rule + sensor, so one
 # faulty sensor spamming bad readings doesn't flood the alerts list with
 # duplicates of the same problem.
 ALERT_COOLDOWN_SECONDS = 60
+

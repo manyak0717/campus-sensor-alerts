@@ -1,7 +1,4 @@
-"""Ingestion endpoints. Intentionally thin: validate, enqueue, return. All
-the real work (rule evaluation, persistence) happens in the background
-consumer — see app/ingestion.py.
-"""
+"""Ingestion endpoints. Intentionally thin: validate, enqueue, return."""
 from fastapi import APIRouter, HTTPException
 
 from app import ingestion
@@ -17,6 +14,7 @@ def _to_queue_item(r: Reading):
 @router.post("/readings", response_model=IngestAck, status_code=202)
 async def ingest_single(reading: Reading):
     if not ingestion.queue_has_room(1):
+        ingestion.record_rejection(1)
         raise HTTPException(status_code=503, detail="Ingest queue is full, retry shortly")
     ingestion.enqueue([_to_queue_item(reading)])
     return IngestAck(accepted=1, queueDepth=ingestion.queue.qsize())
@@ -26,6 +24,7 @@ async def ingest_single(reading: Reading):
 async def ingest_batch(batch: ReadingBatch):
     n = len(batch.readings)
     if not ingestion.queue_has_room(n):
+        ingestion.record_rejection(n)
         raise HTTPException(status_code=503, detail="Ingest queue is full, retry shortly")
     ingestion.enqueue([_to_queue_item(r) for r in batch.readings])
     return IngestAck(accepted=n, queueDepth=ingestion.queue.qsize())
